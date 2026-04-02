@@ -6,3 +6,5 @@ pillow
 img2pdf
 rembg
 onnxruntime
+python-dotenv
+
