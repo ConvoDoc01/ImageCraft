@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Compressor - ImageCraft</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: Inter, sans-serif;
+      background: #f8fafc;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tool-page {
+      max-width: 700px;
+      margin: 60px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .tool-page h1 {
+      margin-bottom: 10px;
+    }
+
+    .tool-page p {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .upload-box {
+      border: 2px dashed #ccc;
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"],
+    input[type="range"] {
+      width: 100%;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #111827;
+      color: white;
+      border: none;
+      padding: 14px 22px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #result {
+      margin-top: 20px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      text-decoration: none;
+      color: #111827;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="tool-page">
+    <a href="/" class="back-link">← Back to Home</a>
+
+    <h1>Image Compressor</h1>
+    <p>Upload your image and compress it instantly.</p>
+
+    <form id="compressForm">
+      <div class="upload-box">
+        <label>Select Image</label>
+        <input type="file" id="imageFile" name="file" accept="image/*" required />
+      </div>
+
+      <label>Compression Quality: <span id="qualityValue">70</span>%</label>
+      <input type="range" id="quality" name="quality" min="10" max="95" value="70" />
+
+      <button type="submit">Compress Image</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+  const qualitySlider = document.getElementById("quality");
+  const qualityValue = document.getElementById("qualityValue");
+  const form = document.getElementById("compressForm");
+  const result = document.getElementById("result");
+
+  qualitySlider.addEventListener("input", () => {
+    qualityValue.textContent = qualitySlider.value;
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("imageFile");
+    const file = fileInput.files[0];
+    const quality = qualitySlider.value;
+
+    if (!file) {
+      result.innerHTML = "<p style='color:red;'>Please select an image.</p>";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("quality", quality);
+
+    result.innerHTML = "<p>Compressing image...</p>";
+
+    try {
+      const response = await fetch("/compress", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Compression failed");
+      }
+
+      result.innerHTML = `
+        <p style="color:green;">${data.message}</p>
+        <a href="${data.download_url}" download>
+          <button type="button">Download Compressed Image</button>
+        </a>
+      `;
+    } catch (error) {
+      result.innerHTML = `<p style='color:red;'>${error.message}</p>`;
+    }
+  });
+</script>
+
+
+</body>
+</html>

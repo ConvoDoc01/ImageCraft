@@ -1,0 +1,8 @@
+{
+  "name": "imagecraft",
+  "version": "1.0.0",
+  "description": "ImageCraft FastAPI Project",
+  "scripts": {
+    "start": "uvicorn app:app --reload"
+  }
+}

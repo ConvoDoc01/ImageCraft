@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Resizer - ImageCraft</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      font-family: Inter, sans-serif;
+      background: #f8fafc;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tool-page {
+      max-width: 700px;
+      margin: 60px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .tool-page h1 {
+      margin-bottom: 10px;
+    }
+
+    .tool-page p {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .upload-box {
+      border: 2px dashed #ccc;
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"],
+    input[type="number"] {
+      width: 100%;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background: #111827;
+      color: white;
+      border: none;
+      padding: 14px 22px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #result {
+      margin-top: 20px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      text-decoration: none;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    .preview {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .preview img {
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="tool-page">
+    <a href="/" class="back-link">← Back to Home</a>
+
+    <h1>Image Resizer</h1>
+    <p>Upload your image and resize it to custom dimensions instantly.</p>
+
+    <form id="resizeForm">
+      <div class="upload-box">
+        <label>Select Image</label>
+        <input type="file" id="imageFile" name="file" accept="image/*" required />
+      </div>
+
+      <label>Width (px)</label>
+      <input type="number" id="width" name="width" min="1" placeholder="Enter width" required />
+
+      <label>Height (px)</label>
+      <input type="number" id="height" name="height" min="1" placeholder="Enter height" required />
+
+      <button type="submit">Resize Image</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("resizeForm");
+    const result = document.getElementById("result");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const fileInput = document.getElementById("imageFile");
+      const width = document.getElementById("width").value;
+      const height = document.getElementById("height").value;
+      const file = fileInput.files[0];
+
+      if (!file) {
+        result.innerHTML = "<p style='color:red;'>Please select an image.</p>";
+        return;
+      }
+
+      if (!width || !height || width <= 0 || height <= 0) {
+        result.innerHTML = "<p style='color:red;'>Please enter valid width and height.</p>";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("width", width);
+      formData.append("height", height);
+
+      result.innerHTML = "<p>Resizing image...</p>";
+
+      try {
+        const response = await fetch("/resize", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Resize failed");
+        }
+
+        result.innerHTML = `
+          <p style="color:green;">${data.message}</p>
+          <div class="preview">
+            <img src="${data.download_url}" alt="Resized Image" />
+          </div>
+          <br>
+          <a href="${data.download_url}" download>
+            <button type="button">Download Resized Image</button>
+          </a>
+        `;
+      } catch (error) {
+        result.innerHTML = `<p style='color:red;'>${error.message}</p>`;
+      }
+    });
+  </script>
+
+</body>
+</html>

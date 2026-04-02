@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image to PDF - ImageCraft</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      font-family: Inter, sans-serif;
+      background: #f8fafc;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tool-page {
+      max-width: 700px;
+      margin: 60px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+
+    .tool-page h1 {
+      margin-bottom: 10px;
+    }
+
+    .tool-page p {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .upload-box {
+      border: 2px dashed #ccc;
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #111827;
+      color: white;
+      border: none;
+      padding: 14px 22px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #result {
+      margin-top: 20px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      text-decoration: none;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    .file-info {
+      font-size: 14px;
+      color: #374151;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="tool-page">
+    <a href="/" class="back-link">← Back to Home</a>
+
+    <h1>Image to PDF</h1>
+    <p>Upload one or multiple images and convert them into a PDF instantly.</p>
+
+    <form id="pdfForm">
+      <div class="upload-box">
+        <label>Select Images</label>
+        <input type="file" id="imageFiles" name="files" accept="image/*" multiple required />
+        <div id="fileInfo" class="file-info"></div>
+      </div>
+
+      <button type="submit">Convert to PDF</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("pdfForm");
+    const result = document.getElementById("result");
+    const fileInput = document.getElementById("imageFiles");
+    const fileInfo = document.getElementById("fileInfo");
+
+    fileInput.addEventListener("change", () => {
+      const files = fileInput.files;
+      if (files.length > 0) {
+        fileInfo.textContent = `${files.length} image(s) selected`;
+      } else {
+        fileInfo.textContent = "";
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const files = fileInput.files;
+
+      if (!files || files.length === 0) {
+        result.innerHTML = "<p style='color:red;'>Please select at least one image.</p>";
+        return;
+      }
+
+      const formData = new FormData();
+
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+
+      result.innerHTML = "<p>Converting images to PDF...</p>";
+
+      try {
+        const response = await fetch("/image-to-pdf", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "PDF conversion failed");
+        }
+
+        result.innerHTML = `
+          <p style="color:green;">${data.message}</p>
+          <a href="${data.download_url}" download>
+            <button type="button">Download PDF</button>
+          </a>
+        `;
+      } catch (error) {
+        result.innerHTML = `<p style='color:red;'>${error.message}</p>`;
+      }
+    });
+  </script>
+
+</body>
+</html>
