@@ -13,7 +13,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from PIL import Image
-from rembg import remove
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -22,50 +21,87 @@ load_dotenv()
 app = FastAPI(title="ImageCraft")
 
 BASE_DIR = Path(__file__).resolve().parent
-print("RUNNING FROM:", BASE_DIR)
+print("🚀 ImageCraft starting from:", BASE_DIR)
 
-# Serve static files
-app.mount("/static", StaticFiles(directory=BASE_DIR), name="static")
-
+# =========================
+# PATHS
+# =========================
 MESSAGES_FILE = BASE_DIR / "contact_messages.txt"
 
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "outputs"
 TEMP_DIR = BASE_DIR / "temp"
+STATIC_DIR = BASE_DIR / "static"
 
-for folder in [UPLOAD_DIR, OUTPUT_DIR, TEMP_DIR]:
+# Create required folders
+for folder in [UPLOAD_DIR, OUTPUT_DIR, TEMP_DIR, STATIC_DIR]:
     folder.mkdir(exist_ok=True)
 
+# Mount static folder safely
+# NOTE: Put any static assets inside /static folder if possible
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# =========================
+# HELPERS
+# =========================
 def read_html_file(filename: str):
     file_path = BASE_DIR / filename
     if file_path.exists():
         return HTMLResponse(content=file_path.read_text(encoding="utf-8"))
     return HTMLResponse(content=f"<h1>{filename} not found</h1>", status_code=404)
 
+
 def is_allowed_image(filename: str) -> bool:
     allowed = [".jpg", ".jpeg", ".png", ".webp"]
     ext = Path(filename).suffix.lower()
     return ext in allowed
 
+
 def save_upload_file(upload_file: UploadFile, destination: Path):
     with open(destination, "wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer)
 
+
+# =========================
+# HEALTH CHECK (IMPORTANT FOR DEBUG)
+# =========================
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "app": "ImageCraft"}
+
+
+# =========================
+# HOME + ROOT FILES
+# =========================
 @app.get("/", response_class=HTMLResponse)
 async def home():
     return read_html_file("index.html")
 
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon_ico():
-    return FileResponse(BASE_DIR / "favicon.ico")
+    file_path = BASE_DIR / "favicon.ico"
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"success": False, "message": "favicon.ico not found"}, status_code=404)
+
 
 @app.get("/favicon.png", include_in_schema=False)
 async def favicon_png():
-    return FileResponse(BASE_DIR / "favicon.png")
+    file_path = BASE_DIR / "favicon.png"
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"success": False, "message": "favicon.png not found"}, status_code=404)
+
 
 @app.get("/Fevicon.png", include_in_schema=False)
 async def favicon_misspelled():
-    return FileResponse(BASE_DIR / "favicon.png")
+    file_path = BASE_DIR / "favicon.png"
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"success": False, "message": "favicon.png not found"}, status_code=404)
+
 
 # =========================
 # TOOL PAGES
@@ -91,7 +127,7 @@ async def resize_page():
 
 
 # =========================
-# SERVE CSS
+# SERVE ROOT CSS / JS (for your current project structure)
 # =========================
 @app.get("/style.css")
 async def get_css():
@@ -104,9 +140,6 @@ async def get_css():
     )
 
 
-# =========================
-# SERVE JS
-# =========================
 @app.get("/script.js")
 async def get_js():
     js_path = BASE_DIR / "script.js"
@@ -128,19 +161,16 @@ async def contact_form(
     message: str = Form(...)
 ):
     try:
-        # Load from .env
         sender_email = os.getenv("EMAIL_USER")
         sender_password = os.getenv("EMAIL_PASS")
         receiver_email = os.getenv("RECEIVER_EMAIL", "convodoc@gmail.com")
 
-        # Validate env vars
         if not sender_email or not sender_password:
             return JSONResponse({
                 "success": False,
-                "message": "Email configuration missing. Please set EMAIL_USER and EMAIL_PASS in .env"
+                "message": "Email configuration missing. Please set EMAIL_USER and EMAIL_PASS."
             }, status_code=500)
 
-        # Save message locally (backup)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         contact_entry = (
             f"📩 New Contact Message\n"
@@ -151,17 +181,13 @@ async def contact_form(
             f"{'-' * 50}\n"
         )
 
-        # Print in terminal / Render logs
         print(contact_entry)
 
-        # Save in file as backup
         with open(MESSAGES_FILE, "a", encoding="utf-8") as f:
             f.write(contact_entry)
 
-        # Create email
         subject = f"📩 New Contact Form Message from {name}"
-        body = f"""
-You received a new contact form message from your ImageCraft website.
+        body = f"""You received a new contact form message from your ImageCraft website.
 
 Time: {timestamp}
 Name: {name}
@@ -169,25 +195,19 @@ User Email: {email}
 
 Message:
 {message}
-        """
+"""
 
         msg = MIMEMultipart()
         msg["From"] = sender_email
         msg["To"] = receiver_email
         msg["Subject"] = subject
-
-        # IMPORTANT:
-        # When you click Reply in Gmail, reply goes to the user who submitted the form
         msg["Reply-To"] = email
-
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
-        # Send email via Gmail SMTP
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-        server.quit()
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
 
         return JSONResponse({
             "success": True,
@@ -195,7 +215,7 @@ Message:
         })
 
     except Exception as e:
-        print("Contact form error:", str(e))
+        print("❌ Contact form error:", str(e))
         return JSONResponse({
             "success": False,
             "message": "Failed to send message. Please try again later."
@@ -214,7 +234,6 @@ async def compress_image(file: UploadFile = File(...), quality: int = Form(70)):
                 status_code=400
             )
 
-        # Clamp quality to safe range
         quality = max(10, min(95, quality))
 
         ext = Path(file.filename).suffix.lower()
@@ -236,7 +255,7 @@ async def compress_image(file: UploadFile = File(...), quality: int = Form(70)):
         })
 
     except Exception as e:
-        print("Compress error:", str(e))
+        print("❌ Compress error:", str(e))
         return JSONResponse(
             {"success": False, "message": "Failed to compress image."},
             status_code=500
@@ -244,11 +263,14 @@ async def compress_image(file: UploadFile = File(...), quality: int = Form(70)):
 
 
 # =========================
-# BACKGROUND REMOVER
+# BACKGROUND REMOVER (LAZY IMPORT FIX)
 # =========================
 @app.post("/remove-bg")
 async def remove_background(file: UploadFile = File(...)):
     try:
+        # IMPORTANT: Lazy import so Render startup doesn't hang
+        from rembg import remove
+
         if not is_allowed_image(file.filename):
             return JSONResponse(
                 {"success": False, "message": "Unsupported file format."},
@@ -279,7 +301,7 @@ async def remove_background(file: UploadFile = File(...)):
         })
 
     except Exception as e:
-        print("Remove BG error:", str(e))
+        print("❌ Remove BG error:", str(e))
         return JSONResponse(
             {"success": False, "message": "Failed to remove background."},
             status_code=500
@@ -291,6 +313,8 @@ async def remove_background(file: UploadFile = File(...)):
 # =========================
 @app.post("/image-to-pdf")
 async def image_to_pdf(files: list[UploadFile] = File(...)):
+    temp_converted_files = []
+
     try:
         image_paths = []
 
@@ -312,6 +336,8 @@ async def image_to_pdf(files: list[UploadFile] = File(...)):
             img.save(converted_path, "JPEG")
 
             image_paths.append(str(converted_path))
+            temp_converted_files.append(input_path)
+            temp_converted_files.append(converted_path)
 
         output_name = f"images_{uuid.uuid4()}.pdf"
         output_path = OUTPUT_DIR / output_name
@@ -326,11 +352,20 @@ async def image_to_pdf(files: list[UploadFile] = File(...)):
         })
 
     except Exception as e:
-        print("Image to PDF error:", str(e))
+        print("❌ Image to PDF error:", str(e))
         return JSONResponse(
             {"success": False, "message": "Failed to create PDF."},
             status_code=500
         )
+
+    finally:
+        # Cleanup temp files
+        for temp_file in temp_converted_files:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except Exception:
+                pass
 
 
 # =========================
@@ -349,14 +384,12 @@ async def resize_image(
                 status_code=400
             )
 
-        # Basic validation
         if width <= 0 or height <= 0:
             return JSONResponse(
                 {"success": False, "message": "Width and height must be greater than 0."},
                 status_code=400
             )
 
-        # Prevent absurd sizes
         if width > 10000 or height > 10000:
             return JSONResponse(
                 {"success": False, "message": "Width or height is too large."},
@@ -383,7 +416,7 @@ async def resize_image(
         })
 
     except Exception as e:
-        print("Resize error:", str(e))
+        print("❌ Resize error:", str(e))
         return JSONResponse(
             {"success": False, "message": "Failed to resize image."},
             status_code=500
@@ -404,4 +437,3 @@ async def download_file(filename: str):
         {"success": False, "message": "File not found."},
         status_code=404
     )
-    
