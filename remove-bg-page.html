@@ -104,52 +104,58 @@
   </div>
 
   <script>
-    const form = document.getElementById("removeBgForm");
-    const result = document.getElementById("result");
+  const form = document.getElementById("removeBgForm");
+  const result = document.getElementById("result");
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-      const fileInput = document.getElementById("imageFile");
-      const file = fileInput.files[0];
+    const fileInput = document.getElementById("imageFile");
+    const file = fileInput.files[0];
 
-      if (!file) {
-        result.innerHTML = "<p style='color:red;'>Please select an image.</p>";
-        return;
+    if (!file) {
+      result.innerHTML = "<p style='color:red;'>Please select an image.</p>";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    result.innerHTML = "<p>Removing background...</p>";
+
+    try {
+      const response = await fetch("/remove-bg", {
+        method: "POST",
+        body: formData
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server error (possibly 502). Please check deployment logs.");
       }
 
-      const formData = new FormData();
-      formData.append("file", file);
+      const data = await response.json();
 
-      result.innerHTML = "<p>Removing background...</p>";
-
-      try {
-        const response = await fetch("/remove-bg", {
-          method: "POST",
-          body: formData
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Background removal failed");
-        }
-
-        result.innerHTML = `
-          <p style="color:green;">${data.message}</p>
-          <div class="preview">
-            <img src="${data.download_url}" alt="Background Removed Image" />
-          </div>
-          <br>
-          <a href="${data.download_url}" download>
-            <button type="button">Download Image</button>
-          </a>
-        `;
-      } catch (error) {
-        result.innerHTML = `<p style='color:red;'>${error.message}</p>`;
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Background removal failed");
       }
-    });
-  </script>
+
+      result.innerHTML = `
+        <p style="color:green;">${data.message}</p>
+        <div class="preview">
+          <img src="${data.download_url}" alt="Background Removed Image" />
+        </div>
+        <br>
+        <a href="${data.download_url}" download>
+          <button type="button">Download Image</button>
+        </a>
+      `;
+    } catch (error) {
+      result.innerHTML = `<p style='color:red;'>${error.message}</p>`;
+    }
+  });
+</script>
 
 </body>
 </html>

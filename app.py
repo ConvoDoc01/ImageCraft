@@ -267,13 +267,29 @@ async def compress_image(file: UploadFile = File(...), quality: int = Form(70)):
 # =========================
 @app.post("/remove-bg")
 async def remove_background(file: UploadFile = File(...)):
+    input_path = None
+    output_path = None
+
     try:
-        # IMPORTANT: Lazy import so Render startup doesn't hang
         from rembg import remove
+
+        if not file.filename:
+            return JSONResponse(
+                {"success": False, "message": "No file selected."},
+                status_code=400
+            )
 
         if not is_allowed_image(file.filename):
             return JSONResponse(
-                {"success": False, "message": "Unsupported file format."},
+                {"success": False, "message": "Unsupported file format. Use JPG, JPEG, PNG, or WEBP."},
+                status_code=400
+            )
+
+        file_bytes = await file.read()
+
+        if len(file_bytes) == 0:
+            return JSONResponse(
+                {"success": False, "message": "Uploaded file is empty."},
                 status_code=400
             )
 
@@ -281,15 +297,13 @@ async def remove_background(file: UploadFile = File(...)):
         input_name = f"{uuid.uuid4()}{ext}"
         input_path = UPLOAD_DIR / input_name
 
-        save_upload_file(file, input_path)
+        with open(input_path, "wb") as f:
+            f.write(file_bytes)
 
         output_name = f"no_bg_{uuid.uuid4()}.png"
         output_path = OUTPUT_DIR / output_name
 
-        with open(input_path, "rb") as inp:
-            input_data = inp.read()
-
-        output_data = remove(input_data)
+        output_data = remove(file_bytes)
 
         with open(output_path, "wb") as out:
             out.write(output_data)
@@ -301,12 +315,21 @@ async def remove_background(file: UploadFile = File(...)):
         })
 
     except Exception as e:
+        import traceback
         print("❌ Remove BG error:", str(e))
+        traceback.print_exc()
+
         return JSONResponse(
-            {"success": False, "message": "Failed to remove background."},
+            {"success": False, "message": f"Background removal failed: {str(e)}"},
             status_code=500
         )
 
+    finally:
+        try:
+            if input_path and Path(input_path).exists():
+                Path(input_path).unlink()
+        except Exception:
+            pass
 
 # =========================
 # IMAGE TO PDF
