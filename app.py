@@ -273,6 +273,7 @@ async def remove_background(file: UploadFile = File(...)):
 
     try:
         from rembg import remove
+        from PIL import Image, ImageOps
 
         if not file.filename:
             return JSONResponse(
@@ -290,7 +291,7 @@ async def remove_background(file: UploadFile = File(...)):
         input_name = f"{uuid.uuid4()}{ext}"
         input_path = UPLOAD_DIR / input_name
 
-        # Save upload directly to disk (better for large files)
+        # Save upload directly to disk (NO manual size limit)
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
@@ -301,28 +302,30 @@ async def remove_background(file: UploadFile = File(...)):
             )
 
         # =========================
-        # PREPARE IMAGE FOR LIVE SERVER SAFETY
-        # (accept any MB upload, but process optimized image)
+        # PREPARE SAFE IMAGE FOR REMBG
         # =========================
         prepared_path = TEMP_DIR / f"prepared_{uuid.uuid4()}.png"
 
         img = Image.open(input_path)
+        img = ImageOps.exif_transpose(img)   # fix rotation
         img = img.convert("RGBA")
 
-        # Limit dimensions to reduce RAM usage (VERY IMPORTANT FOR LIVE)
-        max_size = (2000, 2000)
-        img.thumbnail(max_size)
+        # VERY IMPORTANT: keep upload unlimited, but processing safe
+        # reduce giant images before rembg
+        max_width = 1600
+        max_height = 1600
+        img.thumbnail((max_width, max_height))
 
         img.save(prepared_path, format="PNG", optimize=True)
 
         with open(prepared_path, "rb") as f:
-            input_data = f.read()
+            safe_bytes = f.read()
 
         output_name = f"no_bg_{uuid.uuid4()}.png"
         output_path = OUTPUT_DIR / output_name
 
-        # Remove background
-        output_data = remove(input_data)
+        # Run rembg on optimized image
+        output_data = remove(safe_bytes)
 
         with open(output_path, "wb") as out:
             out.write(output_data)
