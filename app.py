@@ -268,6 +268,7 @@ async def compress_image(file: UploadFile = File(...), quality: int = Form(70)):
 @app.post("/remove-bg")
 async def remove_background(file: UploadFile = File(...)):
     input_path = None
+    prepared_path = None
     output_path = None
 
     try:
@@ -285,25 +286,43 @@ async def remove_background(file: UploadFile = File(...)):
                 status_code=400
             )
 
-        file_bytes = await file.read()
+        ext = Path(file.filename).suffix.lower()
+        input_name = f"{uuid.uuid4()}{ext}"
+        input_path = UPLOAD_DIR / input_name
 
-        if len(file_bytes) == 0:
+        # Save upload directly to disk (better for large files)
+        with open(input_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        if not input_path.exists() or input_path.stat().st_size == 0:
             return JSONResponse(
                 {"success": False, "message": "Uploaded file is empty."},
                 status_code=400
             )
 
-        ext = Path(file.filename).suffix.lower()
-        input_name = f"{uuid.uuid4()}{ext}"
-        input_path = UPLOAD_DIR / input_name
+        # =========================
+        # PREPARE IMAGE FOR LIVE SERVER SAFETY
+        # (accept any MB upload, but process optimized image)
+        # =========================
+        prepared_path = TEMP_DIR / f"prepared_{uuid.uuid4()}.png"
 
-        with open(input_path, "wb") as f:
-            f.write(file_bytes)
+        img = Image.open(input_path)
+        img = img.convert("RGBA")
+
+        # Limit dimensions to reduce RAM usage (VERY IMPORTANT FOR LIVE)
+        max_size = (2000, 2000)
+        img.thumbnail(max_size)
+
+        img.save(prepared_path, format="PNG", optimize=True)
+
+        with open(prepared_path, "rb") as f:
+            input_data = f.read()
 
         output_name = f"no_bg_{uuid.uuid4()}.png"
         output_path = OUTPUT_DIR / output_name
 
-        output_data = remove(file_bytes)
+        # Remove background
+        output_data = remove(input_data)
 
         with open(output_path, "wb") as out:
             out.write(output_data)
@@ -320,16 +339,20 @@ async def remove_background(file: UploadFile = File(...)):
         traceback.print_exc()
 
         return JSONResponse(
-            {"success": False, "message": f"Background removal failed: {str(e)}"},
+            {
+                "success": False,
+                "message": f"Background removal failed: {str(e)}"
+            },
             status_code=500
         )
 
     finally:
-        try:
-            if input_path and Path(input_path).exists():
-                Path(input_path).unlink()
-        except Exception:
-            pass
+        for path in [input_path, prepared_path]:
+            try:
+                if path and Path(path).exists():
+                    Path(path).unlink()
+            except Exception:
+                pass
 
 # =========================
 # IMAGE TO PDF
