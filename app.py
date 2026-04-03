@@ -272,8 +272,17 @@ async def remove_background(file: UploadFile = File(...)):
     output_path = None
 
     try:
-        from rembg import remove
-        from PIL import Image, ImageOps
+        # Import inside route for safer debugging
+        try:
+            from rembg import remove
+        except Exception as import_error:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "message": f"rembg import failed: {str(import_error)}"
+                },
+                status_code=500
+            )
 
         if not file.filename:
             return JSONResponse(
@@ -291,7 +300,7 @@ async def remove_background(file: UploadFile = File(...)):
         input_name = f"{uuid.uuid4()}{ext}"
         input_path = UPLOAD_DIR / input_name
 
-        # Save upload directly to disk (NO manual size limit)
+        # Save upload directly to disk
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
@@ -301,20 +310,14 @@ async def remove_background(file: UploadFile = File(...)):
                 status_code=400
             )
 
-        # =========================
-        # PREPARE SAFE IMAGE FOR REMBG
-        # =========================
+        # Prepare smaller image for rembg (important for weak hosting)
         prepared_path = TEMP_DIR / f"prepared_{uuid.uuid4()}.png"
 
         img = Image.open(input_path)
-        img = ImageOps.exif_transpose(img)   # fix rotation
         img = img.convert("RGBA")
 
-        # VERY IMPORTANT: keep upload unlimited, but processing safe
-        # reduce giant images before rembg
-        max_width = 1600
-        max_height = 1600
-        img.thumbnail((max_width, max_height))
+        # SUPER SAFE for live hosting
+        img.thumbnail((1200, 1200))
 
         img.save(prepared_path, format="PNG", optimize=True)
 
@@ -324,8 +327,17 @@ async def remove_background(file: UploadFile = File(...)):
         output_name = f"no_bg_{uuid.uuid4()}.png"
         output_path = OUTPUT_DIR / output_name
 
-        # Run rembg on optimized image
-        output_data = remove(safe_bytes)
+        # Process
+        try:
+            output_data = remove(safe_bytes)
+        except Exception as remove_error:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "message": f"rembg processing failed: {str(remove_error)}"
+                },
+                status_code=500
+            )
 
         with open(output_path, "wb") as out:
             out.write(output_data)
